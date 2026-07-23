@@ -1,0 +1,41 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# ── Secrets / env ───────────────────────────────────────────────────────────
+.env
+*.local
+
+# ── Data & model artifacts (keep the dirs via .gitkeep, ignore heavy files) ──
+data/videos/*
+data/frames/*
+data/detections/*
+data/datasets/*
+!**/.gitkeep
+
+# Trained weights are large; regenerate with scripts/train_model.py.
+models/*.pt
+models/*.h5
+models/*.joblib
+!models/.gitkeep
+# ...BUT commit the deployed CNN-GRU model + scaler: Render has no training
+# step at build time, so these must be in the repo or the API falls back to
+# the rule-based predictor instead of the 78%-accurate model.
+!models/cnn_gru_traffic.pt
+!models/scaler.joblib
+
+# YOLO auto-downloads weights into the CWD on first run
+yolov8*.pt
+
+# ── OS / editor ─────────────────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.swp

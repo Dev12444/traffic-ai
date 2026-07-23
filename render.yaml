@@ -1,0 +1,24 @@
+# Render.com deployment (free tier). Commit this + a trained model artifact,
+# connect the repo at https://dashboard.render.com, and Render auto-deploys.
+services:
+  - type: web
+    name: traffic-congestion-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements-api.txt
+    # $PORT is provided by Render; app.main:app is the FastAPI instance.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /status
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.14"
+      - key: DEFAULT_INTERSECTION_ID
+        value: INT-001
+      # Set these in the Render dashboard (do NOT commit real secrets):
+      - key: API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
