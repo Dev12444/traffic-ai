@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { Navigation, ShieldAlert, ShieldCheck, X, MapPin } from 'lucide-react';
 
 export default function GoogleDirectionsPanel({
   intersections,
@@ -19,18 +19,36 @@ export default function GoogleDirectionsPanel({
     }
   }, [initialDestination]);
 
-  // Ensure initialDestination exists in the dropdown options list
   const allDestinations = initialDestination && !intersections.some(i => i.id === initialDestination.id)
     ? [initialDestination, ...intersections]
     : intersections;
 
   const handleCompute = () => {
+    if (startId === 'CURRENT_GPS') {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const userGpsObj = {
+            id: 'user-gps',
+            name: '📍 Current Location',
+            lng: pos.coords.longitude,
+            lat: pos.coords.latitude
+          };
+          const endObj = allDestinations.find(i => i.id === endId) || allDestinations[0];
+          onCalculateRoute(userGpsObj, endObj, avoidCheckpoints);
+        }, () => {
+          const startObj = intersections.find(i => i.id === 'int-2') || intersections[0];
+          const endObj = allDestinations.find(i => i.id === endId) || allDestinations[1];
+          onCalculateRoute(startObj, endObj, avoidCheckpoints);
+        });
+        return;
+      }
+    }
+
     const startObj = intersections.find(i => i.id === startId) || intersections[0];
     const endObj = allDestinations.find(i => i.id === endId) || allDestinations[1];
     onCalculateRoute(startObj, endObj, avoidCheckpoints);
   };
 
-  // Auto-calculate on initial load if initialDestination is provided
   useEffect(() => {
     if (initialDestination) {
       const startObj = intersections.find(i => i.id === startId) || intersections[0];
@@ -98,6 +116,7 @@ export default function GoogleDirectionsPanel({
               outline: 'none'
             }}
           >
+            <option value="CURRENT_GPS">📍 Current GPS Location</option>
             {intersections.map(i => (
               <option key={i.id} value={i.id}>{i.name}</option>
             ))}
