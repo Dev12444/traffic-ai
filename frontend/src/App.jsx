@@ -86,7 +86,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Ahmedabad')}&format=json&limit=1`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Gujarat, India')}&format=json&limit=1`);
       const data = await res.json();
       if (data && data.length > 0) {
         const place = data[0];

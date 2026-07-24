@@ -62,7 +62,7 @@ export default function GoogleSearchCard({
         {/* Input Field */}
         <input
           type="text"
-          placeholder="🔍 Search 150+ Ahmedabad corridors... (Press Enter)"
+          placeholder="🔍 Search ANY place in Gujarat (e.g. Surat, Vadodara, Rajkot)..."
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
