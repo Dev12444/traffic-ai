@@ -1,0 +1,240 @@
+Traffic & emission reduction system
+Mavericks Effect AI Challenge — full project spec and build plan
+Team of 2  |  Submission deadline: July 30, 2026  |  Build window: 12 days (July 18–30)
+1. Problem statement
+Urban intersections run on fixed-timing traffic signals that don't adapt to real conditions. This causes avoidable congestion, wasted fuel, and higher emissions. We're building a system that watches traffic through CCTV, predicts congestion before it happens, and recommends adaptive signal timing plus alternate routes — with a couple of playful, genuinely useful civic features layered on top.
+2. MVP scope — what "done" looks like
+A working web app where:
+	•	A simulated/recorded traffic video feed gets processed to count vehicles per lane, per intersection, over time
+	•	That data feeds a prediction model forecasting congestion 15–20 minutes ahead
+	•	A rule-based optimizer computes recommended signal green-time splits based on current + predicted load
+	•	A live dashboard (map-based) shows current congestion, predicted congestion, and suggested alternate routes
+	•	Summary stats show estimated time/emission savings vs. fixed-timing baseline
+	•	A "forgot your helmet?" toggle that reroutes around manually-marked police checkpoints
+
+MVP is NOT: real government CCTV integration, real-time production deployment, hardware signal control, or automated police detection. It's a convincing, technically real simulation of the full pipeline — which is exactly what hackathon judges want to see.
+3. Tech stack
+Backend / AI
+	•	Python (FastAPI) — inference service for vehicle detection + prediction
+	•	Node.js (Express) — main API server, orchestration, business logic
+	•	YOLOv8 (Ultralytics, pre-trained on COCO, filtered to vehicle classes) — vehicle detection
+	•	PyTorch or TensorFlow — LSTM/GRU congestion prediction model
+	•	PostgreSQL + PostGIS (via Supabase) — spatial data, time-series storage
+	•	pgRouting — shortest-path and constrained routing queries
+	•	Redis (optional, if time permits) — caching live state for fast reads
+Frontend
+	•	React + Vite
+	•	Mapbox GL JS (react-map-gl) — live heatmap, routes, markers
+	•	Recharts — stats/trend charts
+	•	Tailwind CSS
+Data sources
+	•	Traffic video: public dashcam/CCTV footage from YouTube (via yt-dlp) or a Kaggle traffic video dataset
+	•	Historical traffic patterns: Kaggle "Traffic Prediction Dataset" or METR-LA / PEMS-BAY (standard traffic ML benchmarks)
+	•	Road network: OpenStreetMap export (via Overpass API) for a real Ahmedabad-area grid, or a hand-built synthetic grid if OSM data is messy
+	•	Weather: OpenWeatherMap free API
+Infra / deployment
+	•	Backend: Render (free tier) — both Node and Python services
+	•	Frontend: Vercel
+	•	DB: Supabase (managed Postgres + PostGIS)
+	•	Version control: GitHub — shared repo, branch-per-feature
+Prerequisites to install before Day 1
+	•	Python 3.10+, Node.js 18+, pip, npm
+	•	Accounts: Supabase, Mapbox (free tier API key), Render, Vercel, OpenWeatherMap
+	•	pip install ultralytics opencv-python torch pandas numpy fastapi uvicorn
+	•	npm install for both frontend and backend repos once scaffolded
+	•	GitHub repo created, both members added as collaborators
+4. System architecture — ownership split
+Person A owns the AI/ML pipeline (video ingestion → vehicle detection → prediction model). Person B owns backend API, database, and frontend dashboard. The seam between you is a simple, well-defined API contract, so you can work almost fully in parallel with minimal blocking.
+Either of you can take either role — pick based on who's more excited about computer vision vs. who's more excited about geospatial/dashboard work.
+Person A: AI/ML pipeline
+	•	Video ingestion — yt-dlp + OpenCV framing
+	•	Vehicle detection — YOLOv8 counts per lane
+	•	Prediction model — LSTM forecasts congestion
+	•	FastAPI inference service exposing /predict
+Person B: backend + frontend
+	•	Node.js API + Supabase — schema, storage, endpoints
+	•	Signal + route optimizer — PostGIS rule engine
+	•	React + Mapbox dashboard — live heatmap, routes, stats
+	•	Deployment — Render + Vercel
+Predictions and counts flow from Person A's model into Person B's database via a shared API contract — agree on this contract on Day 1 before either of you writes real logic.
+5. Day-by-day, person-by-person workflow (12 days)
+Days 1–2: Setup + parallel foundations
+Person A
+	•	Set up Python env, install ultralytics, OpenCV, PyTorch
+	•	Download 3–4 traffic video clips (YouTube dashcam/CCTV footage via yt-dlp)
+	•	Run YOLOv8 pre-trained model on sample frames — confirm vehicle detection works out of the box
+	•	Download the Kaggle traffic prediction dataset (or METR-LA) — explore its structure
+Person B
+	•	Set up Supabase project, enable PostGIS extension
+	•	Design DB schema: intersections, vehicle_counts, predictions, signal_timings, routes, checkpoints
+	•	Scaffold Node.js/Express API server with route stubs (no logic yet)
+	•	Scaffold React + Vite frontend, install Mapbox GL, get a blank map rendering with your Mapbox key
+Both
+	•	Agree on the API contract — exact JSON shape for /vehicles, /predictions, /routes — write it down in a shared doc so you don't block each other later
+Days 3–5: Core pipeline in parallel
+Person A
+	•	Build the detection pipeline: video → frames → YOLOv8 → count vehicles by lane (define lane regions manually per video using pixel coordinates)
+	•	Output format: {intersection_id, timestamp, lane_counts: {N, S, E, W}}
+	•	Write a script that pushes these counts to Supabase every N seconds
+	•	Start building the LSTM: define input features (past counts, hour, day-of-week, weather), train on the historical dataset
+Person B
+	•	Implement /vehicles endpoint (reads from Supabase, returns latest counts per intersection)
+	•	Get real/synthetic Ahmedabad road network into PostGIS (via Overpass API export or hand-built grid of 8–12 intersections)
+	•	Build the Mapbox layer: intersections as markers, colored by congestion level from /vehicles
+	•	Start the signal timing rule engine: given lane counts, compute green-time split (simple proportional allocation first)
+	•	Add 4–6 manually seeded rows to the checkpoints table for the helmet-reroute feature
+Sync point — end of Day 5
+Person A's counts should be flowing into the DB Person B built. Test this integration explicitly — this is the riskiest joint in the whole system.
+Days 6–8: Prediction + optimization + routing
+Person A
+	•	Finish training the LSTM, validate accuracy (even 70–75% forecast accuracy is fine for a hackathon)
+	•	Wrap it in a FastAPI service: /predict takes recent counts + returns 15–20min forecast
+	•	Test predictions against held-out data, sanity-check the numbers look plausible
+Person B
+	•	Implement /predictions endpoint that calls Person A's FastAPI service and stores results
+	•	Add the prediction overlay on the map (dashed/lighter layer showing forecasted congestion)
+	•	Build PostGIS-based alternate routing: given a congested intersection, compute 1–2 alternate paths using pgRouting or simple Dijkstra over the road graph
+	•	Add route visualization on the map (polylines + ETA labels)
+Sync point — end of Day 8
+Full pipeline should work end-to-end — video in, prediction out, map showing both current + predicted state, routes suggested.
+Days 9–10: Signal optimization refinement + stats dashboard + fun features
+Person A
+	•	Improve the optimizer logic together with Person B: feed predicted counts (not just current) into the signal timing calculation, so lights adapt proactively
+	•	Help validate/tune the prediction model if time allows (more epochs, feature engineering)
+Person B
+	•	Build the stats dashboard: estimated time saved, emissions reduced (formula-based estimate vs. fixed-timing baseline), % of vehicles rerouted
+	•	Add the checkpoint-avoiding route constraint: extend the route optimizer to accept an avoidCheckpoints flag, buffer 150m around active checkpoints
+	•	Build the "Forgot your helmet?" toggle UI next to the route search box, with checkpoint markers shown transparently on the map
+	•	Polish the frontend UI — clean layout, legend, intersection click-through details
+	•	Handle edge cases: missing data, API timeouts, fallback states
+Both
+	•	Cross-review each other's code. Since you're both backend+AI people, do a full walkthrough together — this is also when you catch integration bugs
+Days 11–12: Polish, demo prep, deployment, submission
+Person A
+	•	Prepare a clear explanation of the model (accuracy numbers, architecture diagram) for the pitch
+	•	Record a clean demo clip of the detection pipeline running
+Person B
+	•	Deploy backend (Render) and frontend (Vercel), test the live URLs end-to-end
+	•	Record the full demo flow: congestion building → prediction appearing early → routes adjusting → stats updating → helmet toggle demo
+Both
+	•	Write the README, prepare the pitch deck/script
+	•	Do a full dry run of the demo together, fix anything broken
+	•	Submit by July 30
+6. Database schema reference
+create table intersections (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  geom geography(Point, 4326)
+);
+
+create table vehicle_counts (
+  id uuid primary key default gen_random_uuid(),
+  intersection_id uuid references intersections(id),
+  timestamp timestamptz,
+  lane_counts jsonb  -- {N: 8, S: 5, E: 3, W: 6}
+);
+
+create table predictions (
+  id uuid primary key default gen_random_uuid(),
+  intersection_id uuid references intersections(id),
+  predicted_for timestamptz,
+  predicted_count integer,
+  confidence float
+);
+
+create table signal_timings (
+  id uuid primary key default gen_random_uuid(),
+  intersection_id uuid references intersections(id),
+  timestamp timestamptz,
+  ns_green_secs integer,
+  ew_green_secs integer
+);
+
+create table checkpoints (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  geom geography(Point, 4326),
+  active_from time,
+  active_to time,
+  notes text
+);
+7. API contract (agree on this before Day 1 ends)
+Endpoint
+Owner
+Returns
+GET /vehicles
+Person B
+Latest lane counts per intersection
+POST /vehicles/ingest
+Person A writes, B receives
+Push new counts from detection pipeline
+GET /predictions
+Person B (calls A's model)
+15–20min congestion forecast per intersection
+POST /predict (FastAPI)
+Person A
+Raw model inference endpoint
+GET /routes?from&to&avoidCheckpoints
+Person B
+Route polyline + ETA, optionally checkpoint-free
+GET /checkpoints
+Person B
+Active checkpoint locations for map display
+GET /stats
+Person B
+Time saved, emissions reduced, % rerouted
+8. Feature spec: "Forgot your helmet?" toggle
+Since automated police detection isn't reliable for Indian traffic-vest variations, checkpoints are manually seeded data for the MVP — this is intentional and should be described as such, not hidden.
+User flow
+	•	User requests a route from A to B (normal flow)
+	•	Before showing the route, the UI shows a toggle: "Forgot your helmet?"
+	•	If off (default) → show the normal fastest/optimized route (may pass checkpoints)
+	•	If on → route optimizer adds a constraint: avoid any path segment within ~150m of an active checkpoint → recompute route via PostGIS, show the alternate path with a note like "This route adds ~3 minutes but skips 2 checkpoints"
+Framing for judges — say this in the pitch
+"We added a lighthearted feature: if you forgot your helmet, the app can suggest a fully legal alternate route and reminds you why — no rule-breaking, just smarter path choice, the same way a nudge app might warn you about speed cameras. It's also a great showcase of our routing engine's flexibility — the same PostGIS pathfinding that optimizes for congestion can optimize for any constraint you feed it."
+Note: control this narrative proactively. If a judge asks whether this helps people evade checkpoints, the answer is: the routing itself is 100% legal (public roads, no rule broken) — this is a reminder + route choice tool, not an evasion tool.
+Other smart nudge features (stretch, same pipeline)
+	•	"Signal's about to flip red in 8 seconds" — congestion-prediction-based nudge, no extra ML
+	•	"This lane's had zero violations today" — lighthearted best-behaved-intersection leaderboard
+	•	"Rush hour roast" — auto-generated one-liner for whichever intersection has worst congestion right now
+9. Full feature list
+Core (must-have for MVP)
+	•	Vehicle detection from video feed (YOLOv8), counts per lane per intersection
+	•	Time-series storage of traffic counts (PostGIS + Supabase)
+	•	Congestion prediction 15–20 minutes ahead (LSTM)
+	•	Rule-based adaptive signal timing recommendation
+	•	Alternate route suggestion avoiding predicted congestion (PostGIS/pgRouting)
+	•	Live map dashboard: current congestion heatmap
+	•	Predicted congestion overlay on map
+	•	Route visualization with ETA
+	•	Summary stats: estimated time saved, emissions reduced, % rerouted
+	•	"Forgot your helmet?" checkpoint-avoiding reroute toggle
+Stretch (if ahead of schedule)
+	•	Multi-intersection network view (8–12 intersections instead of 2–3)
+	•	Historical trend charts (Recharts) — congestion over the day/week
+	•	Weather-aware prediction (rain/heat affecting traffic patterns)
+	•	Simple auth for a "city admin" view vs. public view
+	•	Redis caching for faster live reads
+	•	Confidence intervals shown on predictions (not just point estimates)
+	•	Mobile-responsive dashboard
+	•	"Rush hour roast" and best-behaved-intersection leaderboard nudges
+Explicitly out of scope
+	•	Real hardware signal control
+	•	Real government CCTV API integration
+	•	Production-scale video processing (multiple simultaneous live streams)
+	•	Automated police/helmet detection (manual checkpoint data instead)
+10. Known risks and fallbacks
+Risk
+Mitigation
+Video codec/library setup eats hours
+Use a public YouTube traffic camera stream, not live hardware feed
+LSTM training is slow / data messy
+Use a pre-trained traffic prediction model from GitHub as a base, or fall back to a simple rule-based predictor
+Mapbox API quota
+Keep local during dev, deploy with API key only for the live demo
+Real-world road data is messy
+Use a simplified 5x5 grid, Ahmedabad-inspired, instead of full city topology
+Falling behind by Day 8
+Cut alternate routing first, keep prediction + heatmap; cut prediction next if needed, keep detection + heatmap
+
+End of spec — good luck, and remember: sync every few days so neither of you blocks the other for long.
