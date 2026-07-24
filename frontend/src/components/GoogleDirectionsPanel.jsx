@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigation, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 
 export default function GoogleDirectionsPanel({
   intersections,
+  initialDestination,
   onClose,
   onCalculateRoute,
   avoidCheckpoints,
   setAvoidCheckpoints,
   activeRoute
 }) {
-  const [startId, setStartId] = useState('int-2'); // SG Highway
-  const [endId, setEndId] = useState('int-3');   // Ashram Road
+  const [startId, setStartId] = useState('int-2'); // Default SG Highway
+  const [endId, setEndId] = useState(initialDestination?.id || 'int-3');
+
+  useEffect(() => {
+    if (initialDestination) {
+      setEndId(initialDestination.id);
+    }
+  }, [initialDestination]);
+
+  // Ensure initialDestination exists in the dropdown options list
+  const allDestinations = initialDestination && !intersections.some(i => i.id === initialDestination.id)
+    ? [initialDestination, ...intersections]
+    : intersections;
 
   const handleCompute = () => {
     const startObj = intersections.find(i => i.id === startId) || intersections[0];
-    const endObj = intersections.find(i => i.id === endId) || intersections[1];
+    const endObj = allDestinations.find(i => i.id === endId) || allDestinations[1];
     onCalculateRoute(startObj, endObj, avoidCheckpoints);
   };
+
+  // Auto-calculate on initial load if initialDestination is provided
+  useEffect(() => {
+    if (initialDestination) {
+      const startObj = intersections.find(i => i.id === startId) || intersections[0];
+      onCalculateRoute(startObj, initialDestination, avoidCheckpoints);
+    }
+  }, [initialDestination]);
 
   return (
     <div style={{
@@ -33,7 +53,8 @@ export default function GoogleDirectionsPanel({
       overflowY: 'auto',
       borderRight: '1px solid rgba(255, 255, 255, 0.1)',
       backdropFilter: 'blur(20px)',
-      color: '#f8fafc'
+      color: '#f8fafc',
+      fontFamily: 'Inter, sans-serif'
     }}>
       {/* Header */}
       <div style={{
@@ -102,7 +123,7 @@ export default function GoogleDirectionsPanel({
               outline: 'none'
             }}
           >
-            {intersections.map(i => (
+            {allDestinations.map(i => (
               <option key={i.id} value={i.id}>{i.name}</option>
             ))}
           </select>

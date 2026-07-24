@@ -305,6 +305,7 @@ export default function App() {
       {activePanel === 'DIRECTIONS' && (
         <GoogleDirectionsPanel
           intersections={intersections}
+          initialDestination={selectedIntersection}
           onClose={() => {
             setActivePanel(null);
             handleClearRoute();
