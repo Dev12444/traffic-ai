@@ -75,7 +75,7 @@ export default function App() {
       .catch((err) => console.warn('Prediction fetch note:', err));
   }, [selectedIntersection]);
 
-  // 3. Search & Geocoding Handler
+  // 3. Search & Geocoding Handler (Dynamic OSM Geocoding without hardcoded fallback)
   const handleSearchSubmit = async (query) => {
     if (!query.trim()) return;
 
@@ -100,17 +100,21 @@ export default function App() {
         };
         handleSelectIntersection(geocodedObj);
       } else {
-        const fallbackObj = {
-          id: `geo-fallback-${Date.now()}`,
+        // Use current map center dynamically if exact geocoding query returns empty
+        const center = mapRef.current ? mapRef.current.getCenter() : { lng: 72.5714, lat: 23.0225 };
+        const dynamicObj = {
+          id: `geo-dyn-${Date.now()}`,
           name: query.toUpperCase(),
-          lng: 72.5400,
-          lat: 23.0700,
+          lng: center.lng,
+          lat: center.lat,
           lane_counts: { N: 15, S: 18, E: 10, W: 12 },
           status: 'MODERATE'
         };
-        handleSelectIntersection(fallbackObj);
+        handleSelectIntersection(dynamicObj);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Geocoding search note:', e);
+    }
   };
 
   const handleSelectIntersection = (inter) => {
@@ -144,14 +148,14 @@ export default function App() {
     }
   };
 
-  // 5. Initialize Clean Dark Glassmorphism Vector Map (Dark Matter)
+  // 5. Initialize Clean Map & Auto-Detect Browser GPS Location
   useEffect(() => {
     if (!mapRef.current && mapContainerRef.current) {
       try {
         const map = new maplibregl.Map({
           container: mapContainerRef.current,
-          style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', // Sleek Dark Matter Style
-          center: [72.5450, 23.0280], // Ahmedabad
+          style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+          center: [72.5714, 23.0225],
           zoom: 12.8,
           pitch: 30
         });
@@ -163,6 +167,54 @@ export default function App() {
           setTimeout(() => {
             if (mapRef.current) mapRef.current.resize();
           }, 300);
+
+          // Auto-Detect User's Real Browser GPS Position on initial load
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+              const { latitude, longitude } = pos.coords;
+              map.flyTo({
+                center: [longitude, latitude],
+                zoom: 14.5,
+                speed: 1.2
+              });
+
+              // Create pulsing blue GPS dot (Google Maps style)
+              const gpsDot = document.createElement('div');
+              gpsDot.style.cssText = `
+                width: 18px;
+                height: 18px;
+                background: #4285F4;
+                border: 3px solid #ffffff;
+                border-radius: 50%;
+                box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.5);
+                animation: gpsPulse 2s ease-out infinite;
+                cursor: pointer;
+              `;
+
+              // Inject pulse animation CSS if not already present
+              if (!document.getElementById('gps-pulse-style')) {
+                const style = document.createElement('style');
+                style.id = 'gps-pulse-style';
+                style.textContent = `
+                  @keyframes gpsPulse {
+                    0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.5); }
+                    70% { box-shadow: 0 0 0 20px rgba(66, 133, 244, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
+                  }
+                `;
+                document.head.appendChild(style);
+              }
+
+              new maplibregl.Marker({ element: gpsDot })
+                .setLngLat([longitude, latitude])
+                .setPopup(new maplibregl.Popup({ offset: 12 }).setHTML(
+                  '<div style="font-family:Inter,sans-serif;font-size:12px;font-weight:600;color:#1e293b;padding:2px 4px;">📍 You are here</div>'
+                ))
+                .addTo(map);
+            }, (err) => {
+              console.log('GPS Geolocation note:', err.message);
+            }, { enableHighAccuracy: true, timeout: 10000 });
+          }
         });
 
         mapRef.current = map;

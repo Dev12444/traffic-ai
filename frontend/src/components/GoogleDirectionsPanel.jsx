@@ -1,5 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, ShieldAlert, ShieldCheck, X, ArrowRight, ArrowLeft, ArrowUp, CheckCircle, MapPin, ChevronLeft } from 'lucide-react';
+import { Navigation, ShieldAlert, ShieldCheck, X, ArrowRight, ArrowLeft, ArrowUp, CornerUpRight, CornerUpLeft, CheckCircle, MapPin, ChevronLeft, RotateCcw } from 'lucide-react';
+
+// Map OSRM maneuver types to icons
+function getStepIcon(maneuver, modifier) {
+  if (maneuver === 'arrive') return <CheckCircle size={16} color="#10b981" />;
+  if (maneuver === 'depart') return <ArrowUp size={16} color="#38bdf8" />;
+  if (maneuver === 'turn' || maneuver === 'end of road' || maneuver === 'fork' || maneuver === 'new name') {
+    if (modifier && modifier.includes('left')) return <CornerUpLeft size={16} color="#38bdf8" />;
+    if (modifier && modifier.includes('right')) return <CornerUpRight size={16} color="#38bdf8" />;
+    return <ArrowUp size={16} color="#38bdf8" />;
+  }
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return <RotateCcw size={16} color="#a78bfa" />;
+  if (maneuver === 'merge') return <ArrowRight size={16} color="#38bdf8" />;
+  return <ArrowUp size={16} color="#38bdf8" />;
+}
+
+// Format OSRM instruction into readable text
+function formatInstruction(step) {
+  const { maneuver, modifier, road_name, instruction } = step;
+  const road = road_name && road_name !== 'unnamed road' ? road_name : '';
+
+  if (maneuver === 'depart') return `Head ${modifier || 'north'} on ${road || 'the road'}`;
+  if (maneuver === 'arrive') return `Arrive at your destination${road ? ` on ${road}` : ''}`;
+  if (maneuver === 'turn') {
+    const dir = modifier === 'left' ? 'Turn left' : modifier === 'right' ? 'Turn right' : modifier === 'slight left' ? 'Slight left' : modifier === 'slight right' ? 'Slight right' : modifier === 'sharp left' ? 'Sharp left' : modifier === 'sharp right' ? 'Sharp right' : 'Continue';
+    return `${dir}${road ? ` onto ${road}` : ''}`;
+  }
+  if (maneuver === 'new name') return `Continue onto ${road || 'the road'}`;
+  if (maneuver === 'merge') return `Merge${road ? ` onto ${road}` : ''}`;
+  if (maneuver === 'fork') {
+    const dir = modifier && modifier.includes('left') ? 'Keep left' : 'Keep right';
+    return `${dir}${road ? ` onto ${road}` : ''}`;
+  }
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return `Enter roundabout${road ? `, exit onto ${road}` : ''}`;
+  if (maneuver === 'end of road') {
+    const dir = modifier && modifier.includes('left') ? 'Turn left' : 'Turn right';
+    return `${dir} at end of road${road ? ` onto ${road}` : ''}`;
+  }
+  // Fallback
+  return instruction || `Continue on ${road || 'the road'}`;
+}
+
+// Format distance display
+function formatDist(distance_m) {
+  if (distance_m >= 1000) return `${(distance_m / 1000).toFixed(1)} km`;
+  return `${distance_m} m`;
+}
 
 export default function GoogleDirectionsPanel({
   intersections,
@@ -10,8 +56,8 @@ export default function GoogleDirectionsPanel({
   setAvoidCheckpoints,
   activeRoute
 }) {
-  const [startId, setStartId] = useState('int-2'); // Default SG Highway
-  const [endId, setEndId] = useState(initialDestination?.id || 'int-3');
+  const [startId, setStartId] = useState('CURRENT_GPS');
+  const [endId, setEndId] = useState(initialDestination?.id || 'guj-loc-3');
   const [showStepByStep, setShowStepByStep] = useState(false);
 
   useEffect(() => {
@@ -43,7 +89,7 @@ export default function GoogleDirectionsPanel({
           onCalculateRoute(userGpsObj, endObj, avoidCheckpoints);
           setShowStepByStep(true);
         }, () => {
-          const fallbackStart = intersections.find(i => i.id === 'int-2') || intersections[0];
+          const fallbackStart = intersections[0];
           onCalculateRoute(fallbackStart, endObj, avoidCheckpoints);
           setShowStepByStep(true);
         });
@@ -61,16 +107,8 @@ export default function GoogleDirectionsPanel({
     }
   }, [initialDestination]);
 
-  // Turn-by-turn steps generated for active route
-  const navigationSteps = [
-    { icon: <ArrowUp size={16} color="#38bdf8" />, text: `Head towards ${startObj.name}`, dist: '0.4 km' },
-    { icon: <ArrowRight size={16} color="#38bdf8" />, text: `Turn right onto Ahmedabad Metro Corridor`, dist: `${Math.round((activeRoute?.distance_km || 5) * 0.4 * 10) / 10} km` },
-    avoidCheckpoints
-      ? { icon: <ShieldAlert size={16} color="#f43f5e" />, text: `🛡️ Detour active: Bypassing police checkpoints on outer ring road`, dist: '1.2 km' }
-      : { icon: <ShieldCheck size={16} color="#10b981" />, text: `Standard route: Clear arterial road segment`, dist: '0.8 km' },
-    { icon: <ArrowLeft size={16} color="#38bdf8" />, text: `Turn left at major signal junction towards ${endObj.name}`, dist: `${Math.round((activeRoute?.distance_km || 5) * 0.3 * 10) / 10} km` },
-    { icon: <CheckCircle size={16} color="#10b981" />, text: `Arrive at destination: ${endObj.name}`, dist: '0.1 km' }
-  ];
+  // Use real OSRM steps from the active route response
+  const realSteps = activeRoute?.steps || [];
 
   return (
     <div style={{
@@ -230,13 +268,13 @@ export default function GoogleDirectionsPanel({
           </button>
         </div>
       ) : (
-        /* Dedicated Step-by-Step Navigation View */
+        /* Dedicated Step-by-Step Navigation View — REAL OSRM Data */
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Summary Banner */}
           <div style={{ background: '#1e293b', borderRadius: '14px', padding: '16px', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
             <div style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>⏱️ {activeRoute?.eta_mins || 14.5} mins</span>
-              <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: '600' }}>{activeRoute?.distance_km || 6.2} km</span>
+              <span>⏱️ {activeRoute?.eta_mins || '—'} mins</span>
+              <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: '600' }}>{activeRoute?.distance_km || '—'} km</span>
             </div>
             <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc', marginTop: '6px' }}>
               {activeRoute?.name || 'OSRM Real-Road Route'}
@@ -246,13 +284,13 @@ export default function GoogleDirectionsPanel({
             </div>
           </div>
 
-          {/* Turn-by-Turn Step List */}
+          {/* Turn-by-Turn Step List — REAL OSRM DATA */}
           <div style={{ fontSize: '11px', fontWeight: '700', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            STEP-BY-STEP TURN DIRECTIONS
+            STEP-BY-STEP TURN DIRECTIONS ({realSteps.length} steps)
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {navigationSteps.map((step, idx) => (
+            {realSteps.length > 0 ? realSteps.map((step, idx) => (
               <div key={idx} style={{
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -262,19 +300,23 @@ export default function GoogleDirectionsPanel({
                 background: '#1e293b',
                 border: '1px solid rgba(255, 255, 255, 0.05)'
               }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px' }}>
-                  {step.icon}
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '2px', flexShrink: 0 }}>
+                  {getStepIcon(step.maneuver, step.modifier)}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#f8fafc', lineHeight: '1.3' }}>
-                    {step.text}
+                    {formatInstruction(step)}
                   </div>
                   <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '2px' }}>
-                    {step.dist}
+                    {formatDist(step.distance_m)} · ~{Math.max(1, Math.round(step.duration_s / 60))} min
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div style={{ fontSize: '12px', color: '#94a3b8', padding: '12px', background: '#1e293b', borderRadius: '10px' }}>
+                Loading turn-by-turn steps from OSRM…
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}

@@ -260,19 +260,41 @@ app.get('/routes', async (req, res) => {
     const startCoord = [startInter.lng, startInter.lat];
     const endCoord = [endInter.lng, endInter.lat];
 
-    // OSRM Real Road Route API Call
+    // OSRM Real Road Route API Call (with steps=true for turn-by-turn)
     let osrmGeo = null;
     let distKm = 6.5;
     let etaMins = 11.5;
+    let osrmSteps = [];
 
     try {
-      const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${startCoord[0]},${startCoord[1]};${endCoord[0]},${endCoord[1]}?overview=full&geometries=geojson`);
+      const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${startCoord[0]},${startCoord[1]};${endCoord[0]},${endCoord[1]}?overview=full&geometries=geojson&steps=true`);
       const osrmData = await osrmRes.json();
       if (osrmData.routes && osrmData.routes.length > 0) {
         const route = osrmData.routes[0];
         osrmGeo = route.geometry;
         distKm = Math.round((route.distance / 1000) * 10) / 10;
         etaMins = Math.round((route.duration / 60) * 10) / 10;
+
+        // Extract real turn-by-turn steps from OSRM legs
+        if (route.legs && route.legs.length > 0) {
+          route.legs.forEach(leg => {
+            if (leg.steps) {
+              leg.steps.forEach(step => {
+                if (step.distance > 0) {
+                  osrmSteps.push({
+                    instruction: step.name ? `${step.maneuver.type === 'turn' ? (step.maneuver.modifier || 'continue') : step.maneuver.type} onto ${step.name}` : (step.maneuver.type === 'arrive' ? 'Arrive at destination' : step.maneuver.type),
+                    maneuver: step.maneuver.type,
+                    modifier: step.maneuver.modifier || null,
+                    distance_m: Math.round(step.distance),
+                    distance_km: Math.round((step.distance / 1000) * 10) / 10,
+                    duration_s: Math.round(step.duration),
+                    road_name: step.name || 'unnamed road'
+                  });
+                }
+              });
+            }
+          });
+        }
       }
     } catch (err) {
       console.warn('OSRM API note, using fallback geometry:', err);
@@ -297,6 +319,7 @@ app.get('/routes', async (req, res) => {
           bypassed_checkpoints: ['CG Road Police Post', 'SG Highway Trap'],
           notes: `OSRM Real-Road Pathfinding: Rerouted away from 2 active police checkpoints on route to ${endInter.name} (~2.4 mins added, 100% legal public roads).`,
           color: '#ea4335',
+          steps: osrmSteps,
           geometry: {
             type: 'LineString',
             coordinates: activeCoordinates
@@ -314,6 +337,7 @@ app.get('/routes', async (req, res) => {
         checkpoints_encountered: 1,
         notes: `OSRM Real-Road Pathfinding: Optimal turn-by-turn route bypassing bottleneck congestion towards ${endInter.name}.`,
         color: '#1a73e8',
+        steps: osrmSteps,
         geometry: {
           type: 'LineString',
           coordinates: activeCoordinates
